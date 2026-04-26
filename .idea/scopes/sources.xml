@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="sources" pattern="file[pomodoro-sveltekit]:src//*||file[pomodoro-sveltekit]:static//*" />
+</component>

@@ -5,6 +5,8 @@ import globals from 'globals';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript-eslint';
 import svelteConfig from './svelte.config.js';
+import oxlint from "eslint-plugin-oxlint";
+
 
 const gitignorePath = fileURLToPath(new URL('./.gitignore', import.meta.url));
 
@@ -35,5 +37,7 @@ export default ts.config(
 				svelteConfig
 			}
 		}
-	}
+	},
+	...oxlint.configs['flat/recommended'], // oxlint should be the last one
+
 );

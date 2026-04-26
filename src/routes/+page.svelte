@@ -1,4 +1,7 @@
 <script lang="ts">
+	export {};
+	// eslint-disable func-style
+	// eslint-disable no-magic-numbers
 	type PomodoroState = {
 		/**
 		 * the display name of the current timer
@@ -10,44 +13,50 @@
 		duration: number;
 		/**
 		 * update the timer to the next state in the list
+		 *
+		 * @returns should the timer keep on ticking ?
 		 */
-		next: () => void;
+		next: () => boolean;
 	}
 
-	const unstartedState = (): PomodoroState =>({
+	const unstartedState = (): PomodoroState => ({
 		name: "unstarted",
 		duration: 0,
-		next: () => timer.state = workingState()
-	});
-	const workingState = (count: number = 0): PomodoroState =>({
-		name: "working",
-		duration: 20 * 60,
-		next: () => {
-			if (count > 3) {
-				timer.state = longBreakState();
-			}
-			else {
-				timer.state = shortBreakState(count);
-			}
+		next: (): boolean => {
+			timer.state = workingState();
+			return true;
 		}
 	});
-	const shortBreakState = (count: number = 0): PomodoroState =>({
-		name: "short break",
-		duration: 5 * 60,
-		next: () => timer.state = workingState(count++),
+	const workingState = (count = 0): PomodoroState => ({
+		name: "working",
+		duration: 5,
+		next: (): boolean => {
+			timer.state = count > 3 ? longBreakState() : shortBreakState(count);
+			return true;
+		}
 	});
-	const longBreakState = (): PomodoroState =>({
+	const shortBreakState = (count = 0): PomodoroState => ({
+		name: "short break",
+		duration: 2,
+		next: (): boolean => {
+			timer.state = workingState(count + 1);
+			return true;
+		},
+	});
+	const longBreakState = (): PomodoroState => ({
 		name: "long break",
-		duration: 30 * 60,
-		next: () => {
+		duration: 10,
+		next: (): boolean => {
 			timer.state = unstartedState();
+			return false;
 		},
 	});
 
-	let timer = $state<{state: PomodoroState}>({
+	let timer = $state<{ state: PomodoroState }>({
 		state: unstartedState(),
 	});
 
+	// how long do we have until the end of the current counter (in seconds)
 	let remaining = $state(0);
 
 	const minutes = $derived.by(() => Math.floor(remaining / 60));
@@ -58,38 +67,57 @@
 	// state = short break for y minutes
 	// state = long break for z minutes
 
-	let startingTime: DOMHighResTimeStamp | undefined = undefined;
+	let startingTime: DOMHighResTimeStamp | undefined;
 
-	let rAF;
-	function start() {
-		const callback = timeStamp => {
-			startingTime ??= timeStamp;
+	let rAF: number | undefined;
 
-			// how long have we ran in seconds
-			let delta = (timeStamp - startingTime) / 10;
+	const timeFactor = 10e2; // change the speed of time, the bigger the number, the slower the time
 
-			remaining = timer.state.duration - delta;
+	function loop(timeStamp: DOMHighResTimeStamp): void {
+		startingTime ??= timeStamp;
 
-			if (remaining < 0) {
-				timer.state.next()
-			}
+		// how long have we ran in seconds
+		let delta = (timeStamp - startingTime) / timeFactor;
 
-			rAF = requestAnimationFrame(callback);
+		remaining = Math.round(timer.state.duration - delta);
+
+		const state = timer.state.name;
+		let keepTicking: boolean;
+		if (remaining === 0) {
+			keepTicking = timer.state.next();
+			startingTime = timeStamp;
+		}
+		else {
+			keepTicking = true;
+		}
+		if (state !== timer.state.name) {
+			console.log(`${ state } => ${timer.state.name} (${timer.state.duration})`)
 		}
 
-		timer.state = workingState();
-		rAF = requestAnimationFrame(callback);
+		if (keepTicking) {
+			rAF = requestAnimationFrame(loop);
+		}
 	}
 
-	function pause() {
-		cancelAnimationFrame(rAF);
+	function start(): void {
+		if (timer.state.name === 'unstarted') {
+			timer.state = workingState();
+			rAF ??= requestAnimationFrame(loop);
+		}
 	}
 
-	function doBreak() {
-		timer.state = shortBreakState();
+	function stop(): void {
+		if (rAF) {
+			console.log('stop')
+			cancelAnimationFrame(rAF);
+			rAF = undefined;
+			timer.state = unstartedState();
+		}
 	}
 
-
+	// function doBreak(): void {
+	// 	timer.state = shortBreakState();
+	// }
 
 
 </script>
@@ -99,6 +127,6 @@
 <p>{timer.state.name}</p>
 
 <button onclick="{start}">start</button>
-<button onclick="{pause}">pause</button>
-<button onclick="{doBreak}">break</button>
+<button onclick="{stop}">pause</button>
+<!--<button onclick="{doBreak}">break</button>-->
 <span>{minutes}:{seconds}</span>
